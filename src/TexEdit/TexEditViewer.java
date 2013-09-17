@@ -3,18 +3,29 @@ package TexEdit;
 import java.awt.*;
 import java.awt.event.*;
 import java.io.*;
-import java.security.AccessController;
-import java.security.PrivilegedAction;
 
 import javax.swing.*;
+import javax.swing.border.LineBorder;
+import javax.swing.event.DocumentEvent;
+import javax.swing.event.DocumentListener;
 import javax.swing.text.*;
 
 public class TexEditViewer extends JFrame {
 
 	/**
+	 * 
+	 */
+	private static final long serialVersionUID = 1L;
+
+	/**
 	 * text is where the text input will be displayed.
 	 */
 	private JTextArea text;
+
+	/**
+	 * numbering is the text area for numbering the lines of text.
+	 */
+	private JTextArea numbering;
 
 	/**
 	 * saveAs is an action to be taken when the save as option is selected.
@@ -47,6 +58,16 @@ public class TexEditViewer extends JFrame {
 	private boolean changed;
 
 	/**
+	 * HEIGHT is the height of the textArea
+	 */
+	private final int HEIGHT = 44;
+
+	/**
+	 * WIDTH is the width of the textArea
+	 */
+	private final int WIDTH = 40;
+
+	/**
 	 * TexEditViewer initializes private variables and constructs the viewer.
 	 */
 	public TexEditViewer() {
@@ -55,8 +76,7 @@ public class TexEditViewer extends JFrame {
 		compileHelp = new LateCompileJava();
 
 		// Create the text area with the default size and font.
-		text = new JTextArea(80, 50);
-		text.setFont(new Font("Monospaced", Font.PLAIN, 12));
+		text = new JTextArea(HEIGHT, WIDTH);
 
 		// Create the JFileChooser.
 		fileChooser = new JFileChooser(System.getProperty("user.dir"));
@@ -72,8 +92,21 @@ public class TexEditViewer extends JFrame {
 		JScrollPane scroll = new JScrollPane(text,
 				JScrollPane.VERTICAL_SCROLLBAR_ALWAYS,
 				JScrollPane.HORIZONTAL_SCROLLBAR_ALWAYS);
-		scroll.setRowHeaderView(new Numbering());
-		
+
+		// Create a text area to display numbers for text.
+		numbering = new JTextArea();
+		numbering.setEditable(false);
+		numbering.setBackground(Color.white);
+		numbering.setBorder(new LineBorder(Color.LIGHT_GRAY));
+		numbering.setText(getNumbers());
+
+		// Create a DocumentListener that will update the
+		// line numbering when the text area changes.
+		text.getDocument().addDocumentListener(new ControlListener());
+
+		// Place the line numbering into the scroll bar.
+		scroll.setRowHeaderView(numbering);
+
 		// Add the scroll bar to the JFrame.
 		this.add(scroll, BorderLayout.CENTER);
 
@@ -91,17 +124,32 @@ public class TexEditViewer extends JFrame {
 
 		// Create some Actions to place in the option menu.
 		AbstractAction Open = new AbstractAction("Open") {
+
+			/**
+			 * 
+			 */
+			private static final long serialVersionUID = 1L;
+
 			public void actionPerformed(ActionEvent e) {
 				saveOld();
 				if (fileChooser.showOpenDialog(null) == JFileChooser.APPROVE_OPTION) {
 					readInFile(fileChooser.getSelectedFile().getAbsolutePath());
 				}
 				saveAs.setEnabled(true);
+				// Insert a new document listener.
+				text.getDocument().addDocumentListener(new ControlListener());
+				// Set the numbering for the opened text.
+				numbering.setText(getNumbers());
 			}
 		};
 
 		// Create an action listener for the Save option.
 		save = new AbstractAction("Save") {
+			/**
+			 * 
+			 */
+			private static final long serialVersionUID = 1L;
+
 			public void actionPerformed(ActionEvent e) {
 				if (!currentFile.equals("Untitled"))
 					saveFile(currentFile);
@@ -112,16 +160,13 @@ public class TexEditViewer extends JFrame {
 
 		// Create an action listener for the Save as option.
 		saveAs = new AbstractAction("Save as...") {
+			/**
+			 * 
+			 */
+			private static final long serialVersionUID = 1L;
+
 			public void actionPerformed(ActionEvent e) {
 				saveFileAs();
-			}
-		};
-
-		// Create an action listener for the Quit option.
-		AbstractAction Quit = new AbstractAction("Quit") {
-			public void actionPerformed(ActionEvent e) {
-				saveOld();
-				System.exit(0);
 			}
 		};
 
@@ -129,29 +174,32 @@ public class TexEditViewer extends JFrame {
 		// file
 		// When the compile button is pressed.
 		AbstractAction Compile = new AbstractAction("Compile") {
-			@SuppressWarnings("unchecked")
 			/**
-			 * actionPerformed is the action that will be taken when the compile option is selected.
+			 * 
+			 */
+			private static final long serialVersionUID = 1L;
+
+			/**
+			 * actionPerformed is the action that will be taken when the compile
+			 * option is selected.
 			 */
 			public void actionPerformed(ActionEvent e) {
 
 				// If there is a path to a file on record
 				// perform the compilation.
 				if (currentFile != null) {
-					// Get the name of the file without the path.
-					// Note that the '/' is platform dependent.
-					String fileName = currentFile.substring(
-							currentFile.lastIndexOf('/'),
-							currentFile.indexOf('.'));
-					// Get the path to the folder containing the current file.
-					// Note that the '/' is platform dependent.
-					String currentPath = currentFile.substring(0,
-							currentFile.lastIndexOf('/'));
 					try {
 						// Call the lateCompile method to perform the
 						// compilation
 						// of the .tex file.
-						compileHelp.lateCompile(currentPath, fileName);
+					String path = fileChooser
+							.getCurrentDirectory().getPath();
+					
+					String name = fileChooser
+							.getSelectedFile().getName();
+					name = name.substring(0, name.lastIndexOf('.'));
+
+						compileHelp.lateCompile(path, name);
 					} catch (IOException e1) {
 						// If this operation fails print the stack.
 						e1.printStackTrace();
@@ -180,6 +228,23 @@ public class TexEditViewer extends JFrame {
 		edit.add(cut);
 		edit.add(copy);
 		edit.add(paste);
+
+		// Add a key listener that will track whether the
+		// current text has been changed or not.
+		KeyListener keys = new KeyAdapter() {
+			public void keyPressed(KeyEvent e) {
+				// Update the changed variable to true.
+				changed = true;
+				// Enable saving.
+				save.setEnabled(true);
+				saveAs.setEnabled(true);
+
+			}
+		};
+
+		// Add the key listener.
+		text.addKeyListener(keys);
+
 		// Add Compile to the compile option.
 		compile.add(Compile);
 		// Set the default close operation.
@@ -188,18 +253,31 @@ public class TexEditViewer extends JFrame {
 		// Make the JFrame visible.
 		this.setVisible(true);
 
-		// Add a key listener that will track whether the
-		// current text has been changed or not.
-		KeyListener k1 = new KeyAdapter() {
-			public void keyPressed(KeyEvent e) {
-				// Update the changed variable to true.
-				changed = true;
-				// Enable saving.
-				save.setEnabled(true);
-				saveAs.setEnabled(true);
-			}
-		};
+	}
 
+	/**
+	 * getNumbers returns a string that contains a line numbering for the number
+	 * of lines in the text.
+	 * 
+	 * @return the line numbering
+	 */
+	public String getNumbers() {
+		// Build a string containing numbering information for the text.
+		StringBuffer toReturn = new StringBuffer();
+		// Create an int that represents the number of lines in the document.
+		int lines = text.getLineCount() + 1;
+
+		for (int i = 1; i < lines; i++) {
+			// Add a number for each line of text.
+			if (i < lines) {
+				toReturn.append(i + " \n");
+			} else {
+				toReturn.append("  \n");
+			}
+		}
+
+		// Return the string produced.
+		return toReturn.toString();
 	}
 
 	/**
@@ -261,6 +339,42 @@ public class TexEditViewer extends JFrame {
 			save.setEnabled(false);
 		} catch (IOException e) {
 		}
+	}
+
+	/**
+	 * NumberingListener implements DocumentListener for the text fields
+	 * document to allow the numbering field to be updated when the document is
+	 * changed.
+	 * 
+	 * @author James Woods
+	 * 
+	 */
+	public class ControlListener implements DocumentListener {
+
+		/**
+		 * changeUpdate sets the numbering for the text field when the document
+		 * is changed.
+		 */
+		public void changedUpdate(DocumentEvent arg0) {
+			numbering.setText(getNumbers());
+		}
+
+		/**
+		 * insertUpdate sets the numbering for the text field when an insert is
+		 * made to the document.
+		 */
+		public void insertUpdate(DocumentEvent arg0) {
+			numbering.setText(getNumbers());
+		}
+
+		/**
+		 * removeUpdate sets the numbering for the text field when a remove is
+		 * made to th document.
+		 */
+		public void removeUpdate(DocumentEvent arg0) {
+			numbering.setText(getNumbers());
+		}
+
 	}
 
 	/**

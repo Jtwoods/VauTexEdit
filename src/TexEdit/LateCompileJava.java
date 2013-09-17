@@ -46,6 +46,7 @@ public class LateCompileJava {
 	
 		//Create a string to contain the current command to be performed.
 		String command = "";
+		path += "/";
 		
 		//Perform three operations.
 		for(int i = 0; i < TO_DO; i++) {
